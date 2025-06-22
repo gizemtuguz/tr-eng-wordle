@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wordle (TR/EN)</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .container {
+      text-align: center;
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 500px;
+    }
+    button {
+      margin: 0.3rem;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      background: #333;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    #guess-input {
+      padding: 0.5rem;
+      font-size: 1.2rem;
+      width: 70%;
+      text-align: center;
+    }
+    #feedback {
+      color: red;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+    .guess-row {
+      display: flex;
+      justify-content: center;
+      margin: 0.3rem 0;
+    }
+    .letter-box {
+      width: 2rem;
+      height: 2rem;
+      margin: 0.1rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: 2px solid #ccc;
+      font-weight: bold;
+      font-size: 1.2rem;
+      background: #eee;
+    }
+    .green {
+      background: #5cb85c;
+      color: white;
+    }
+    .yellow {
+      background: #f0ad4e;
+      color: white;
+    }
+    .gray {
+      background: #999;
+      color: white;
+    }
+    .keyboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  margin-top: 1rem;
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 0rem;
+}
+
+.key {
+  width: 2rem;         
+  height: 2.5rem;
+  font-size: 1rem;     
+  background: #ddd;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  color: #000;
+  cursor: pointer;
+  padding: 0;
+}
+
+.key.gray {
+  background: #555;
+  color: white;
+}
+
+    .footer {
+      font-size: 0.7rem;
+      color: red;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+    <div class="container">
+      <h1>🟩 Wordle</h1>
+      <div id="lang-select">
+        <button onclick="startGame('tr')">Türkçe</button>
+        <button onclick="startGame('en')">English</button>
+      </div>
+  
+      <div id="game" style="display: none;">
+        <p id="instructions">5 harfli kelimeyi tahmin et (5 deneme hakkı)</p>
+        <form onsubmit="submitGuess(event)">
+          <input type="text" id="guess-input" maxlength="5" required autofocus oninput="validateWord()" />
+          <button type="submit" id="submit-btn">Tahmin Et</button>
+          <div id="feedback"></div>
+        </form>
+        <div id="guesses"></div>
+        <div class="keyboard" id="keyboard"></div>
+  
+        <button id="restart-btn" style="display:none; margin-top: 1rem;" onclick="restartGame()">
+          🔁 Yeniden Oyna
+        </button>
+      </div>
+    </div>
+  
+
+    <script>
+        (function() {
+          let lang = "tr";
+          let wordList = [];
+          let attempts = 0;
+          const maxAttempts = 5;
+          let usedKeys = new Set();
+          let targetWord = "";
+        
+          const turkishKeys = 'qwertyuıopğüasdfghjklşiızxcvbnmöç';
+          const englishKeys = 'qwertyuiopasdfghjklzxcvbnm';
+        
+          async function startGame(selectedLang) {
+            lang = selectedLang;
+            document.getElementById("lang-select").style.display = "none";
+            document.getElementById("game").style.display = "block";
+        
+            const urls = {
+              tr: "https://raw.githubusercontent.com/CanNuhlar/Turkce-Kelime-Listesi/master/turkce_kelime_listesi.txt",
+              en: "https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt"
+            };
+        
+            const res = await fetch(urls[lang]);
+            const text = await res.text();
+            wordList = text.split("\n").map(w => w.trim().toLowerCase()).filter(w => w.length === 5);
+            targetWord = wordList[Math.floor(Math.random() * wordList.length)];
+            renderKeyboard();
+          }
+        
+          function validateWord() {
+            const input = document.getElementById("guess-input");
+            const feedback = document.getElementById("feedback");
+            const btn = document.getElementById("submit-btn");
+            document.getElementById("restart-btn").style.display = "inline-block";
+        
+            const guess = input.value.toLowerCase();
+            if (guess.length === 5 && !wordList.includes(guess)) {
+              feedback.textContent = lang === "tr" ? "Bu kelime sözlükte yok." : "Word not in dictionary.";
+              btn.disabled = true;
+            } else {
+              feedback.textContent = "";
+              btn.disabled = false;
+            }
+          }
+        
+          function submitGuess(event) {
+            event.preventDefault();
+            const input = document.getElementById("guess-input");
+            const guess = input.value.toLowerCase();
+            if (guess.length !== 5 || !wordList.includes(guess)) return;
+        
+            const result = evaluateGuess(guess, targetWord);
+            renderGuess(guess, result);
+            updateKeyboard(guess, result);
+            attempts++;
+            input.value = "";
+            validateWord();
+        
+            if (guess === targetWord) {
+              alert(lang === "tr" ? "🎉 Doğru tahmin!" : "🎉 Correct!");
+              endGame();
+            } else if (attempts >= maxAttempts) {
+              alert((lang === "tr" ? "Kelime şuydu: " : "Word was: ") + targetWord);
+              endGame();
+            }
+          }
+        
+          function endGame() {
+            document.getElementById("submit-btn").disabled = true;
+            document.getElementById("guess-input").disabled = true;
+          }
+        
+          function evaluateGuess(guess, target) {
+            const result = Array(5).fill("gray");
+            const used = Array(5).fill(false);
+            for (let i = 0; i < 5; i++) {
+              if (guess[i] === target[i]) {
+                result[i] = "green";
+                used[i] = true;
+              }
+            }
+            for (let i = 0; i < 5; i++) {
+              if (result[i] === "gray") {
+                for (let j = 0; j < 5; j++) {
+                  if (!used[j] && guess[i] === target[j]) {
+                    result[i] = "yellow";
+                    used[j] = true;
+                    break;
+                  }
+                }
+              }
+            }
+            return result;
+          }
+        
+          function renderGuess(guess, result) {
+            const row = document.createElement("div");
+            row.className = "guess-row";
+            for (let i = 0; i < 5; i++) {
+              const box = document.createElement("div");
+              box.className = `letter-box ${result[i]}`;
+              box.textContent = guess[i];
+              row.appendChild(box);
+            }
+            document.getElementById("guesses").appendChild(row);
+          }
+        
+          function renderKeyboard() {
+            const keyboard = document.getElementById("keyboard");
+            keyboard.innerHTML = "";
+            const rows = lang === "tr"
+              ? ['q w e r t y u ı o p ğ ü', 'a s d f g h j k l ş i', 'z x c v b n m ö ç']
+              : ['q w e r t y u i o p', 'a s d f g h j k l', 'z x c v b n m'];
+        
+            rows.forEach(row => {
+              const rowDiv = document.createElement("div");
+              rowDiv.className = "keyboard-row";
+        
+              row.split(" ").forEach(char => {
+                const btn = document.createElement("button");
+                btn.className = `key ${usedKeys.has(char) ? 'gray' : ''}`;
+                btn.textContent = char.toUpperCase();
+                btn.onclick = () => {
+                  const input = document.getElementById("guess-input");
+                  if (input.value.length < 5) {
+                    input.value += char;
+                    validateWord();
+                    input.focus();
+                  }
+                };
+                rowDiv.appendChild(btn);
+              });
+        
+              keyboard.appendChild(rowDiv);
+            });
+          }
+        
+          function updateKeyboard(guess, result) {
+            for (let i = 0; i < 5; i++) {
+              if (result[i] === "gray") {
+                usedKeys.add(guess[i]);
+              }
+            }
+            renderKeyboard();
+          }
+        
+          document.addEventListener("keydown", (e) => {
+            const input = document.getElementById("guess-input");
+            if (!input || input.disabled) return;
+            if (e.key === "Enter") {
+              document.getElementById("submit-btn").click();
+            } else if (e.key === "Backspace") {
+              input.value = input.value.slice(0, -1);
+              validateWord();
+            }
+          });
+        
+          function restartGame() {
+            attempts = 0;
+            usedKeys.clear();
+            document.getElementById("guess-input").value = "";
+            document.getElementById("guess-input").disabled = false;
+            document.getElementById("submit-btn").disabled = false;
+            document.getElementById("feedback").textContent = "";
+            document.getElementById("guesses").innerHTML = "";
+            document.getElementById("restart-btn").style.display = "none";
+            targetWord = wordList[Math.floor(Math.random() * wordList.length)];
+            renderKeyboard();
+          }
+        
+          
+          window.startGame = startGame;
+          window.submitGuess = submitGuess;
+          window.restartGame = restartGame;
+          window.validateWord = validateWord;
+        
+        })();
+        </script>
+</body>
+</html>
